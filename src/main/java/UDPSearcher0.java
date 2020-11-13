@@ -7,32 +7,36 @@ import java.util.concurrent.CountDownLatch;
 /**
  * UDP 搜索这，用于搜索服务支持方
  */
-public class UDPSearcher {
+public class UDPSearcher0 {
 
     private static final int LISTEN_PORT = 30000;
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         System.out.println("UDPSearcher Started");
 
-        listen();
+        Listener listener = listen();
         sendBoadcast();
+
+        //读取任意键盘信息后可以退出
+        System.in.read();
+        List<Device> devices = listener.getDevicesAndClose();
+
+        for(Device device:devices){
+            System.out.println("Device："+device.toString());
+        }
+        //完成
+        System.out.println("UDPSearcher Finished");
     }
 
-    private static void listen() {
-//构建接收实体
-        final byte[] buf = new byte[512];
-        DatagramPacket receivePack = new DatagramPacket(buf, buf.length);
+    private static Listener listen() throws InterruptedException {
+        System.out.println("UDPSearcher start listen.");
 
-        //接收
-        ds.receive(receivePack);
+        CountDownLatch countDownLatch = new CountDownLatch(1);
+        Listener listener = new Listener(LISTEN_PORT, countDownLatch);
+        listener.start();
 
-        //打印接收到的消息与发送者信息
-        //发送者的IP地址
-        String ip = receivePack.getAddress().getHostAddress();
-        int port = receivePack.getPort();
-        int dataLen = receivePack.getLength();
-        String data = new String(receivePack.getData(), 0, dataLen);
-        System.out.println("UDPSearcher receive form ip:" + ip + "\tport:" + port + "\tdata:" + data);
+        countDownLatch.await();
+        return listener;
     }
 
     private static void sendBoadcast() throws IOException {
@@ -48,8 +52,9 @@ public class UDPSearcher {
         //直接根据发送者构建一份回送信息
         DatagramPacket requestPacket = new DatagramPacket(requestDataBytes,
                 requestDataBytes.length);
-        //本机20000端口
+        //广播端口
         requestPacket.setAddress(InetAddress.getByName("255.255.255.255"));
+        //本机20000端口
         requestPacket.setPort(20000);
 
         //发送
@@ -100,27 +105,53 @@ public class UDPSearcher {
             super.run();
             //通知已经启动
             countDownLatch.countDown();
-            try{
+            try {
+                //监听回送端口
+                ds = new DatagramSocket(listenPort);
 
-            }catch (Exception e){
+                while (!done) {
+                    //构建接收实体
+                    final byte[] buf = new byte[512];
+                    DatagramPacket receivePack = new DatagramPacket(buf, buf.length);
 
-            }finally {
+                    //接收
+                    ds.receive(receivePack);
 
+                    //打印接收到的消息与发送者信息
+                    //发送者的IP地址
+                    String ip = receivePack.getAddress().getHostAddress();
+                    int port = receivePack.getPort();
+                    int dataLen = receivePack.getLength();
+                    String data = new String(receivePack.getData(), 0, dataLen);
+                    System.out.println("UDPSearcher receive form ip:" + ip + "\tport:" + port + "\tdata:" + data);
+
+                    String sn = MessageCreator.parseSn(data);
+                    if (sn != null) {
+                        Device device = new Device(port, ip, sn);
+                        devices.add(device);
+                    }
+                }
+
+            } catch (Exception e) {
+
+            } finally {
+                close();
             }
+            System.out.println("UDPSearcher listener finished");
         }
 
-         private void close(){
-            if(ds !=null){
+        private void close() {
+            if (ds != null) {
                 ds.close();
                 ds = null;
             }
-         }
+        }
 
-         List<Device> getDevicesAndClose(){
+        List<Device> getDevicesAndClose() {
             done = true;
             close();
             return devices;
-         }
+        }
 
 
     }

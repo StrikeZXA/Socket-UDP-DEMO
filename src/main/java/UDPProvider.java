@@ -17,7 +17,7 @@ public class UDPProvider {
 
         //读取任意字符后可以退出
         System.in.read();
-        provider.close();
+        provider.exit();
     }
 
     private static class Provider extends Thread {
@@ -50,12 +50,13 @@ public class UDPProvider {
                     ds.receive(receivePack);
 
                     //打印接收到的消息与发送者信息
+                    //发送者的IP地址
                     String ip = receivePack.getAddress().getHostAddress();
                     int port = receivePack.getPort();
-                    int dataLen = receivePack.getLength();
-                    String data = new String(receivePack.getData(), 0, dataLen);
+                    int dataLen = receivePack.getLength();String data = new String(receivePack.getData(), 0, dataLen);
                     System.out.println("UDPProvider receive form ip:" + ip + "\tport:" + port + "\tdata:" + data);
 
+                    //解析端口号
                     int responsePort = MessageCreator.parsePort(data);
                     if (responsePort != -1) {
                         //构建一份回送数据
@@ -80,9 +81,14 @@ public class UDPProvider {
 
         private void close() {
             if (ds != null) {
-                done = true;
                 ds.close();
+                ds = null;
             }
+        }
+
+        void exit(){
+            done = true;
+            close();
         }
 
     }
